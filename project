@@ -1,0 +1,196 @@
+#include <iostream>
+#include <deque>
+#include <cstdint>
+#include <vector>
+#include <cstring>  // for memset
+#include <string>
+#include "bmp.hpp"  // must provide Bitmap + color as noted below
+
+using namespace std;
+
+#define MAX_SIZE 1000
+
+// If your class already defines this struct, remove this and use the class one.
+struct color {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+};
+
+// Assumed bmp.hpp API:
+// class Bitmap {
+//  public:
+//   bool open(const std::string& path);
+//   bool save(const std::string& path) const;
+//   int getWidth() const;
+//   int getHeight() const;
+//   color getPixel(int x, int y) const;
+//   void setPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b);
+// };
+
+static bool visited[MAX_SIZE][MAX_SIZE];
+
+static inline bool sameColor(const color &a, const color &b) {
+    return a.r == b.r && a.g == b.g && a.b == b.b;
+}
+
+static inline uint8_t clamp8(uint64_t v) {
+    return (v > 255u) ? 255u : static_cast<uint8_t>(v);
+}
+
+// ======================
+//   PART 1: FLOOD FILL
+// ======================
+void floodFill(Bitmap &image, int startX, int startY, color fillColor) {
+    const int width  = image.getWidth();
+    const int height = image.getHeight();
+
+    if (width <= 0 || height <= 0 || width > MAX_SIZE || height > MAX_SIZE) {
+        cerr << "Error: Image dimensions out of supported range ("
+             << width << "x" << height << ", MAX " << MAX_SIZE << ").\n";
+        return;
+    }
+    if (startX < 0 || startY < 0 || startX >= width || startY >= height) {
+        cerr << "Warning: start point out of bounds. Skipping flood fill.\n";
+        return;
+    }
+
+    const color startColor = image.getPixel(startX, startY);
+    if (sameColor(startColor, fillColor)) {
+        // Nothing to do
+        return;
+    }
+
+    // Reset visited for whole MAX grid (safe + simple)
+    std::memset(visited, 0, sizeof(visited));
+
+    std::deque<pair<int,int>> dq;
+    dq.push_back({startX, startY});
+    visited[startY][startX] = true;
+
+    // 4-connected neighbors
+    static const int dx[4] = { 0,  0, -1,  1};
+    static const int dy[4] = {-1,  1,  0,  0};
+
+    while (!dq.empty()) {
+        auto [x, y] = dq.front();
+        dq.pop_front();
+
+        // Fill only if the pixel matches the original start color
+        const color cur = image.getPixel(x, y);
+        if (!sameColor(cur, startColor)) continue;
+
+        image.setPixel(x, y, fillColor.r, fillColor.g, fillColor.b);
+
+        for (int dir = 0; dir < 4; ++dir) {
+            const int nx = x + dx[dir];
+            const int ny = y + dy[dir];
+            if (nx >= 0 && ny >= 0 && nx < width && ny < height && !visited[ny][nx]) {
+                visited[ny][nx] = true;  // mark when pushing (prevents duplicates)
+                dq.push_back({nx, ny});
+            }
+        }
+    }
+}
+
+// =======================
+//   PART 2: SQUARE BLUR
+// =======================
+// Uses an intermediate CPU buffer (no Bitmap copy required).
+void applySquareBlur(Bitmap &image, int blurSize) {
+    const int width  = image.getWidth();
+    const int height = image.getHeight();
+
+    if (width <= 0 || height <= 0) return;
+    if (blurSize < 1) return;
+
+    const int half = blurSize / 2;
+
+    // Read all pixels into buffers for stable reads during write-back.
+    std::vector<color> src(width * height);
+    std::vector<color> dst(width * height);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            src[y * width + x] = image.getPixel(x, y);
+        }
+    }
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            uint64_t sumR = 0, sumG = 0, sumB = 0;
+            int count = 0;
+
+            const int y0 = std::max(0, y - half);
+            const int y1 = std::min(height - 1, y + half);
+            const int x0 = std::max(0, x - half);
+            const int x1 = std::min(width  - 1, x + half);
+
+            for (int ny = y0; ny <= y1; ++ny) {
+                const int row = ny * width;
+                for (int nx = x0; nx <= x1; ++nx) {
+                    const color &c = src[row + nx];
+                    sumR += c.r;
+                    sumG += c.g;
+                    sumB += c.b;
+                    ++count;
+                }
+            }
+
+            color avg;
+            avg.r = clamp8(sumR / (count ? count : 1));
+            avg.g = clamp8(sumG / (count ? count : 1));
+            avg.b = clamp8(sumB / (count ? count : 1));
+            dst[y * width + x] = avg;
+        }
+    }
+
+    // Write back
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            const color &c = dst[y * width + x];
+            image.setPixel(x, y, c.r, c.g, c.b);
+        }
+    }
+}
+
+// ===================
+//   MAIN (example)
+// ===================
+int main(int argc, char** argv) {
+    const std::string in  = (argc > 1) ? argv[1] : "sample.bmp";
+    const std::string out1 = (argc > 2) ? argv[2] : "floodfill_output.bmp";
+    const std::string out2 = (argc > 3) ? argv[3] : "blur_output.bmp";
+
+    Bitmap image;
+    if (!image.open(in)) {
+        std::cerr << "Failed to open input file: " << in << "\n";
+        return 1;
+    }
+
+    // --- Flood fill demo ---
+    color fillColor{255, 0, 0}; // Red
+    // Choose a valid seed known to be inside the region you want to fill
+    floodFill(image, 50, 50, fillColor);
+    if (!image.save(out1)) {
+        std::cerr << "Failed to save flood fill output: " << out1 << "\n";
+        return 1;
+    }
+
+    // --- Blur demo ---
+    // Re-open original (blur should be applied to the original, not the filled one)
+    Bitmap toBlur;
+    if (!toBlur.open(in)) {
+        std::cerr << "Failed to re-open input for blur: " << in << "\n";
+        return 1;
+    }
+
+    applySquareBlur(toBlur, 5); // adjust size (odd values like 3,5,7 are typical)
+    if (!toBlur.save(out2)) {
+        std::cerr << "Failed to save blur output: " << out2 << "\n";
+        return 1;
+    }
+
+    std::cout << "Done. Wrote: " << out1 << " and " << out2 << "\n";
+    return 0;
+}
