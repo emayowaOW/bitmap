@@ -4,108 +4,87 @@
 
 using namespace std;
 
-// Struct to store pixel coordinates
+const int MAX_SIZE = 1000;
+bool visited[MAX_SIZE][MAX_SIZE] = { false };
+
 struct pixel {
-    int x, y;
+    int x;
+    int y;
     pixel(int x_ = 0, int y_ = 0) : x(x_), y(y_) {}
 };
 
-// ----------------------
-// Flood Fill Algorithm
-// ----------------------
 void floodFill(BMP& image, int startX, int startY, color fillColor)
 {
     int h = image.get_height();
     int w = image.get_width();
 
-    // Check bounds
+    // Validate starting position
     if (startX < 0 || startX >= w || startY < 0 || startY >= h)
         return;
 
     color startColor = image.get_pixel(startX, startY);
-    if (startColor == fillColor)
+
+    // If the color to fill is the same as the original, stop
+    if (startColor.r == fillColor.r && startColor.g == fillColor.g && startColor.b == fillColor.b)
         return;
 
-    bool visited[1000][1000] = { false };
-
-    deque<pixel> q;
-    q.push_back(pixel(startX, startY));
+    deque<pixel> fillDeque;
+    fillDeque.push_back(pixel(startX, startY));
     visited[startY][startX] = true;
 
-    int dx[4] = { 1, -1, 0, 0 };
-    int dy[4] = { 0, 0, 1, -1 };
+    while (!fillDeque.empty())
+    {
+        pixel temp = fillDeque.front();
+        fillDeque.pop_front();
 
-    while (!q.empty()) {
-        pixel p = q.front();
-        q.pop_front();
+        color tempColor = image.get_pixel(temp.x, temp.y);
 
-        image.set_pixel(p.x, p.y, fillColor);
+        // Only fill if color matches the start color
+        if (tempColor.r == startColor.r && tempColor.g == startColor.g && tempColor.b == startColor.b)
+        {
+            image.set_pixel(temp.x, temp.y, fillColor);
 
-        for (int i = 0; i < 4; i++) {
-            int nx = p.x + dx[i];
-            int ny = p.y + dy[i];
+            // Check 8 neighbors
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    int nx = temp.x + dx;
+                    int ny = temp.y + dy;
 
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx]) {
-                color c = image.get_pixel(nx, ny);
-                if (c == startColor) {
-                    visited[ny][nx] = true;
-                    q.push_back(pixel(nx, ny));
+                    // Skip the current pixel itself
+                    if (dx == 0 && dy == 0) continue;
+
+                    // Check image boundaries
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx])
+                    {
+                        visited[ny][nx] = true;
+                        fillDeque.push_back(pixel(nx, ny));
+                    }
                 }
             }
         }
     }
 }
 
-// ----------------------
-// Blur Effect
-// ----------------------
-void blur(BMP& image)
-{
-    int h = image.get_height();
-    int w = image.get_width();
-
-    BMP temp = image; // copy for reference
-
-    for (int y = 1; y < h - 1; y++) {
-        for (int x = 1; x < w - 1; x++) {
-            int rSum = 0, gSum = 0, bSum = 0;
-            int count = 0;
-
-            // Average color of neighboring pixels
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dx = -1; dx <= 1; dx++) {
-                    color c = temp.get_pixel(x + dx, y + dy);
-                    rSum += c.red;
-                    gSum += c.green;
-                    bSum += c.blue;
-                    count++;
-                }
-            }
-
-            color newColor(rSum / count, gSum / count, bSum / count);
-            image.set_pixel(x, y, newColor);
-        }
-    }
-}
-
-// ----------------------
-// Main Function
-// ----------------------
 int main()
 {
     BMP image("sample2.bmp");
 
-    // Perform flood fill at (100,100) with red color
-    color red(255, 0, 0);
-    floodFill(image, 100, 100, red);
-    image.write("flood_filled.bmp");
-    cout << "Flood fill complete. Saved as flood_filled.bmp" << endl;
+    // Choose your fill color (R,G,B)
+    color fill(255, 0, 0); // Red color
 
-    // Apply blur effect
-    blur(image);
-    image.write("blurred.bmp");
-    cout << "Blur effect complete. Saved as blurred.bmp" << endl;
+    // Choose the starting point
+    int startX = 300;
+    int startY = 300;
+
+    cout << "Running flood fill from (" << startX << ", " << startY << ")..." << endl;
+
+    floodFill(image, startX, startY, fill);
+
+    // Save result
+    image.write("C:\\Users\\ebenz\\Downloads\\img1.bmp");
+    cout << "✅ Flood fill complete. Image saved to C:\\Users\\ebenz\\Downloads\\img1.bmp" << endl;
 
     return 0;
 }
-
