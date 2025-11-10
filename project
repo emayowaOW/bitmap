@@ -8,83 +8,60 @@ const int MAX_SIZE = 1000;
 bool visited[MAX_SIZE][MAX_SIZE] = { false };
 
 struct pixel {
-    int x;
-    int y;
+    int x, y;
     pixel(int x_ = 0, int y_ = 0) : x(x_), y(y_) {}
 };
 
-void floodFill(BMP& image, int startX, int startY, color fillColor)
+void floodFill(BMP &image, int startX, int startY, color fillColor)
 {
     int h = image.get_height();
     int w = image.get_width();
 
-    // Validate starting position
     if (startX < 0 || startX >= w || startY < 0 || startY >= h)
         return;
 
     color startColor = image.get_pixel(startX, startY);
 
-    // If the color to fill is the same as the original, stop
+    // If the start color is already the fill color, nothing to do
     if (startColor.r == fillColor.r && startColor.g == fillColor.g && startColor.b == fillColor.b)
         return;
 
-    deque<pixel> fillDeque;
-    fillDeque.push_back(pixel(startX, startY));
+    // Reset visited
+    for (int i = 0; i < h; i++)
+        for (int j = 0; j < w; j++)
+            visited[i][j] = false;
+
+    deque<pixel> q;
+    q.push_back(pixel(startX, startY));
     visited[startY][startX] = true;
 
-    while (!fillDeque.empty())
-    {
-        pixel temp = fillDeque.front();
-        fillDeque.pop_front();
+    // 4-directional movement
+    int dx[] = {1, -1, 0, 0};
+    int dy[] = {0, 0, 1, -1};
 
-        color tempColor = image.get_pixel(temp.x, temp.y);
+    while (!q.empty()) {
+        pixel temp = q.front();
+        q.pop_front();
 
-        // Only fill if color matches the start color
-        if (tempColor.r == startColor.r && tempColor.g == startColor.g && tempColor.b == startColor.b)
-        {
+        color curr = image.get_pixel(temp.x, temp.y);
+        if (curr.r == startColor.r && curr.g == startColor.g && curr.b == startColor.b) {
             image.set_pixel(temp.x, temp.y, fillColor);
 
-            // Check 8 neighbors
-            for (int dx = -1; dx <= 1; dx++)
-            {
-                for (int dy = -1; dy <= 1; dy++)
-                {
-                    int nx = temp.x + dx;
-                    int ny = temp.y + dy;
-
-                    // Skip the current pixel itself
-                    if (dx == 0 && dy == 0) continue;
-
-                    // Check image boundaries
-                    if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx])
-                    {
-                        visited[ny][nx] = true;
-                        fillDeque.push_back(pixel(nx, ny));
-                    }
+            for (int i = 0; i < 4; i++) {
+                int nx = temp.x + dx[i];
+                int ny = temp.y + dy[i];
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx]) {
+                    q.push_back(pixel(nx, ny));
+                    visited[ny][nx] = true;
                 }
             }
         }
     }
 }
 
-int main()
-{
+int main() {
     BMP image("sample2.bmp");
-
-    // Choose your fill color (R,G,B)
-    color fill(255, 0, 0); // Red color
-
-    // Choose the starting point
-    int startX = 300;
-    int startY = 300;
-
-    cout << "Running flood fill from (" << startX << ", " << startY << ")..." << endl;
-
-    floodFill(image, startX, startY, fill);
-
-    // Save result
-    image.write("C:\\Users\\ebenz\\Downloads\\img1.bmp");
-    cout << "✅ Flood fill complete. Image saved to C:\\Users\\ebenz\\Downloads\\img1.bmp" << endl;
-
-    return 0;
+    color fill(255, 0, 0);  // Red color
+    floodFill(image, 300, 300, fill);
+    image.write("C:\\Users\\erics\\Documents\\GitHub\\Bitmap\\Bitmap\\image2.bmp");
 }
